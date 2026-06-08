@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+*.log
+
+# Secrets locaux — ne jamais commiter (cf. .streamlit/secrets.toml.example pour le modèle)
+.streamlit/secrets.toml
