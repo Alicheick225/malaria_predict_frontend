@@ -1,50 +1,31 @@
 """Performance du modèle — comparaison des horizons, scatter, courbes d'apprentissage, importance globale, à propos."""
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pandas as pd
-import requests
 import streamlit as st
 
 from components.charts import plot_global_feature_importance, plot_scatter_obs_pred, plot_training_curves
+from utils.api_client import cached_model_info
 
 st.set_page_config(layout="wide", page_title="Modèle — MalariaWatch CI", page_icon="🧠")
 st.markdown("<style>.stApp { background-color: #1E1E2E; }</style>", unsafe_allow_html=True)
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-# Le frontend lit directement les artefacts d'entraînement partagés via le volume backend/ml/saved_model
-SAVED_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "ml" / "saved_model"
-
 st.title("🧠 Performance du modèle LSTM")
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _load_artifact(name: str) -> pd.DataFrame | None:
-    path = SAVED_DIR / name
-    if not path.exists():
-        return None
-    return pd.read_csv(path)
+def _as_dataframe(records: list[dict] | None) -> pd.DataFrame | None:
+    return pd.DataFrame(records) if records else None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _load_metadata() -> dict | None:
-    import json
-    path = SAVED_DIR / "metadata.json"
-    if not path.exists():
-        return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-metadata = _load_metadata()
-horizon_metrics = _load_artifact("horizon_metrics.csv")
-test_predictions = _load_artifact("test_predictions.csv")
-training_history = _load_artifact("training_history.csv")
-contributions = _load_artifact("feature_contributions.csv")
-if contributions is None:
-    contributions = _load_artifact(str(Path("..") / "data" / "predictions" / "feature_contributions.csv"))
+# Le frontend est déployé séparément du backend (Streamlit Cloud / Render) : il n'a
+# donc pas accès au système de fichiers de `backend/ml/saved_model`. Ces artefacts
+# transitent par l'API (`/api/v1/model/info`) plutôt que d'être lus directement sur disque.
+info = cached_model_info() or {}
+metadata = info.get("metadata")
+horizon_metrics = _as_dataframe(info.get("horizon_metrics"))
+test_predictions = _as_dataframe(info.get("test_predictions"))
+training_history = _as_dataframe(info.get("training_history"))
+contributions = _as_dataframe(info.get("feature_contributions"))
 
 if metadata is None:
     st.warning(

@@ -98,6 +98,12 @@ class APIClient:
             return _mock_district_detail(district_id)
         return data
 
+    def get_model_info(self) -> dict | None:
+        data, err = self._get("/model/info")
+        if err:
+            return None
+        return data
+
     def run_pipeline(self, horizon: int = 8) -> dict:
         try:
             r = requests.post(f"{API}/predictions/run", params={"horizon": horizon}, timeout=120)
@@ -136,6 +142,11 @@ def cached_district_history(district_id: str) -> pd.DataFrame:
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_district_detail(district_id: str) -> dict:
     return APIClient().get_district_detail(district_id)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_model_info() -> dict | None:
+    return APIClient().get_model_info()
 
 
 # ── Repli : données simulées (si le backend est inaccessible) ────────────────
