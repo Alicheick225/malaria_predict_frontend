@@ -9,11 +9,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-DARK_BG = "#1E1E2E"
-PANEL_BG = "#262637"
-TEXT_COLOR = "#E0E0EA"
-GRID_COLOR = "#3A3A50"
-ACCENT = "#3498DB"
+DARK_BG    = "#0F1117"
+PANEL_BG   = "#1A1D27"
+TEXT_COLOR = "#FAFAFA"
+GRID_COLOR = "#2E3250"
+ACCENT     = "#3498DB"
 RISK_COLORS = {"Faible": "#2ECC71", "Modéré": "#F39C12", "Élevé": "#E74C3C"}
 
 FEATURE_LABELS = {
