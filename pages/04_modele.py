@@ -114,6 +114,7 @@ with col_arch:
             "~52 000 paramètres entraînables",
             "Adam (lr = 1e-3) / MSE",
             "Dropout(0.2) × 2 + Early Stopping (patience = 15)",
+            f"v{_META['version']} — entraîné le {_META['trained_at']}",
         ],
     }
     arch_df = pd.DataFrame(arch_data)
@@ -303,18 +304,19 @@ st.divider()
 st.subheader("Validation du modèle — graphiques comparatifs")
 
 tab_scatter, tab_curves, tab_features = st.tabs([
-    "Observé vs Prédit",
-    "Courbes d'apprentissage",
-    "Importance des features",
+    "Le modèle prédit-il fidèlement l'incidence ?",
+    "Le réseau a-t-il convergé sans surapprentissage ?",
+    "Quelles variables pilotent le plus les prédictions ?",
 ])
 
 with tab_scatter:
-    st.markdown("**Valeurs observées vs prédites (jeu de test, horizon h = 1 mois)**")
+    st.markdown("**Valeurs observées vs prédites — jeu de test 2021-2024 (horizon h = 1 mois)**")
     st.markdown(
         '<div class="section-intro">'
-        "Un bon modèle aligne les points sur la droite y = x (rouge pointillé). "
-        "La dispersion indique l'incertitude résiduelle — particulièrement visible "
-        "pour les districts à forte incidence (valeurs extrêmes)."
+        "Un modèle parfait aligne tous les points sur la droite y = x (rouge pointillé). "
+        "La dispersion autour de cette droite représente l'erreur résiduelle. "
+        "Les points les plus éloignés correspondent aux districts à forte incidence : "
+        "les pics épidémiques extrêmes sont plus difficiles à prédire."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -328,7 +330,9 @@ with tab_scatter:
         st.caption(
             f"Métriques globales (h=1) : RMSE = {m['rmse']:.2f}  ·  MAE = {m['mae']:.2f}  ·  "
             f"R² = {m['r2']:.3f}  "
-            f"(période de test : {_META['test_period'][0]} → {_META['test_period'][1]})"
+            f"(période de test : {_META['test_period'][0]} → {_META['test_period'][1]}). "
+            "À retenir : le R² le plus élevé est obtenu à h=3 mois (0.645) — "
+            "la fenêtre de 8 mois capture mieux la saisonnalité qu'un signal de court terme plus bruité."
         )
     else:
         st.info(
@@ -336,12 +340,12 @@ with tab_scatter:
         )
 
 with tab_curves:
-    st.markdown("**Courbes de perte MSE — entraînement vs validation**")
+    st.markdown("**Courbes de perte MSE — entraînement vs validation (74 epochs)**")
     st.markdown(
         '<div class="section-intro">'
-        "Les courbes de perte montrent la convergence du réseau au fil des epochs. "
-        "L'écart entre train et validation (trait plein vs pointillé) indique le niveau de "
-        "surapprentissage. L'arrêt prématuré (early stopping) a été déclenché à l'epoch 74."
+        "La perte d'entraînement (trait plein) et de validation (pointillé) doivent converger "
+        "sans diverger — un écart croissant signalerait un surapprentissage. "
+        "L'early stopping a stoppé l'entraînement à l'epoch 74 (patience = 15)."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -352,20 +356,22 @@ with tab_curves:
             config={"displayModeBar": False},
         )
         st.caption(
-            "Epochs d'entraînement : 74 / 150 (early stopping, patience = 15). "
-            "La perte de validation reste proche de la perte d'entraînement — "
-            "pas de surapprentissage significatif."
+            "À retenir : les deux courbes restent proches tout au long de l'entraînement — "
+            "le modèle n'a pas mémorisé les données d'entraînement au détriment de la généralisation. "
+            "Le dropout (0.2 × 2 couches) et l'early stopping ont rempli leur rôle de régularisation."
         )
     else:
         st.info("Historique d'entraînement indisponible.")
 
 with tab_features:
-    st.markdown("**Importance globale des features (moyenne nationale)**")
+    st.markdown("**Importance globale des features — moyenne sur tous les districts (proxy SHAP)**")
     st.markdown(
         '<div class="section-intro">'
-        "Moyenne, sur l'ensemble des districts, des contributions Gradient × Input "
+        "Moyenne nationale des contributions Gradient × Input "
         "(approximation de SHAP adaptée aux réseaux récurrents). "
-        "Indique quelles variables d'entrée pèsent le plus dans la prédiction du mois suivant."
+        "Contrairement aux contributions par district (page Détail), "
+        "cette vue révèle les leviers épidémiologiques structurels — "
+        "les variables que le modèle juge universellement déterminantes."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -374,6 +380,12 @@ with tab_features:
             plot_global_feature_importance(contributions),
             use_container_width=True,
             config={"displayModeBar": False},
+        )
+        st.caption(
+            "À retenir : si l'incidence passée (incidence_rate_1k) domine, "
+            "le modèle s'appuie principalement sur l'inertie épidémique — "
+            "si les variables climatiques (tp_mm, t2m_c) ou ITN dominent, "
+            "les interventions et l'environnement sont les principaux leviers d'action."
         )
     else:
         st.info(

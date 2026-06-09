@@ -197,57 +197,6 @@ def plot_top_districts(df: pd.DataFrame, n: int = 10, title: str = "Top district
     return _base_layout(fig, title, height=420)
 
 
-# ── 7bis. Cas prédits par district (barres verticales, vue tableau de bord) ──
-def plot_predicted_cases_bar(df: pd.DataFrame, n: int = 12,
-                              title: str = "Cas prédits par district (taux /1000 hab.)") -> go.Figure:
-    d = df.sort_values("cases_predicted", ascending=False).head(n)
-    colors = [RISK_COLORS.get(lvl, ACCENT) for lvl in d["risk_level"]]
-    fig = go.Figure(go.Bar(
-        x=d["district_name"], y=d["cases_predicted"],
-        marker_color=colors,
-        text=[f"{v:.0f}" for v in d["cases_predicted"]], textposition="outside",
-    ))
-    fig.update_layout(xaxis_title="", yaxis_title="Taux d'incidence prédit (/1000 hab.)",
-                      xaxis=dict(tickangle=-45))
-    return _base_layout(fig, title, height=460)
-
-
-# ── 7ter. Évolution nationale prédite (agrégat multi-districts) ─────────────
-def plot_national_trend(df: pd.DataFrame, title: str = "Évolution de l'incidence nationale prédite") -> go.Figure:
-    g = df.groupby("week_predicted")["cases_predicted"].mean().reset_index()
-    fig = go.Figure(go.Scatter(
-        x=g["week_predicted"], y=g["cases_predicted"],
-        mode="lines+markers", line=dict(color=ACCENT, width=3),
-        marker=dict(size=8), fill="tozeroy", fillcolor="rgba(52,152,219,0.15)",
-    ))
-    fig.update_layout(xaxis_title="Mois prédit", yaxis_title="Taux d'incidence moyen national (/1000 hab.)")
-    return _base_layout(fig, title)
-
-
-def plot_risk_distribution_over_time(df: pd.DataFrame,
-                                       title: str = "Répartition des districts par niveau de risque") -> go.Figure:
-    g = df.groupby(["week_predicted", "risk_level"]).size().reset_index(name="n")
-    fig = go.Figure()
-    for level in ["Faible", "Modéré", "Élevé"]:
-        sub = g[g["risk_level"] == level]
-        fig.add_trace(go.Bar(x=sub["week_predicted"], y=sub["n"], name=level,
-                             marker_color=RISK_COLORS[level]))
-    fig.update_layout(barmode="stack", xaxis_title="Mois prédit", yaxis_title="Nombre de districts")
-    return _base_layout(fig, title)
-
-
-def plot_cumulative_national(df: pd.DataFrame,
-                              title: str = "Cumul prédit de l'incidence nationale") -> go.Figure:
-    g = df.groupby("week_predicted")["cases_predicted"].mean().reset_index()
-    g["cumule"] = g["cases_predicted"].cumsum()
-    fig = go.Figure(go.Scatter(
-        x=g["week_predicted"], y=g["cumule"],
-        mode="lines+markers", line=dict(color="#9B59B6", width=3),
-        marker=dict(size=8), fill="tozeroy", fillcolor="rgba(155,89,182,0.15)",
-    ))
-    fig.update_layout(xaxis_title="Mois prédit", yaxis_title="Cumul du taux d'incidence moyen (/1000 hab.)")
-    return _base_layout(fig, title)
-
 
 # ── 8. Scatter observé vs prédit (page modèle) ───────────────────────────────
 def plot_scatter_obs_pred(df: pd.DataFrame, title: str = "Cas observés vs prédits (jeu de test)") -> go.Figure:
@@ -282,3 +231,75 @@ def plot_global_feature_importance(df: pd.DataFrame, title: str = "Importance gl
     fig = go.Figure(go.Bar(x=agg.values, y=agg.index, orientation="h", marker_color=ACCENT))
     fig.update_layout(xaxis_title="Contribution moyenne (|valeur SHAP|)")
     return _base_layout(fig, title, height=380)
+
+
+# ── 11. Barres des cas prédits — top n districts (page accueil) ─────────────
+def plot_predicted_cases_bar(df: pd.DataFrame, n: int = 10) -> go.Figure:
+    RISK_COLORS_LOCAL = {"Faible": "#2ECC71", "Modéré": "#F39C12", "Élevé": "#E74C3C"}
+    d = df.sort_values("cases_predicted", ascending=False).head(n).sort_values("cases_predicted")
+    colors = [RISK_COLORS_LOCAL.get(lvl, ACCENT) for lvl in d["risk_level"]]
+    fig = go.Figure(go.Bar(
+        x=d["cases_predicted"], y=d["district_name"], orientation="h",
+        marker_color=colors,
+        text=[f"{v:.0f}" for v in d["cases_predicted"]], textposition="outside",
+    ))
+    fig.update_layout(xaxis_title="Cas prédits (/1 000 hab.)")
+    return _base_layout(fig, f"Top {n} districts", height=380)
+
+
+# ── 12. Tendance nationale prédite (page accueil) ────────────────────────────
+def plot_national_trend(predictions: pd.DataFrame) -> go.Figure:
+    df = predictions.copy()
+    df["week_predicted"] = pd.to_datetime(df["week_predicted"])
+    trend = df.groupby("week_predicted")["cases_predicted"].mean().reset_index()
+    trend = trend.sort_values("week_predicted")
+    fig = go.Figure(go.Scatter(
+        x=trend["week_predicted"], y=trend["cases_predicted"],
+        mode="lines+markers", line=dict(color=ACCENT, width=2),
+        marker=dict(size=6), name="Incidence moyenne nationale",
+    ))
+    fig.update_layout(
+        xaxis_title="Période", yaxis_title="Taux d'incidence moyen (/1 000 hab.)",
+    )
+    return _base_layout(fig, "Évolution de l'incidence nationale prédite")
+
+
+# ── 13. Répartition des niveaux de risque dans le temps (page accueil) ───────
+def plot_risk_distribution_over_time(predictions: pd.DataFrame) -> go.Figure:
+    df = predictions.copy()
+    df["week_predicted"] = pd.to_datetime(df["week_predicted"])
+    grouped = (df.groupby(["week_predicted", "risk_level"])
+                 .size().reset_index(name="count"))
+    grouped = grouped.sort_values("week_predicted")
+
+    RISK_COLORS_LOCAL = {"Faible": "#2ECC71", "Modéré": "#F39C12", "Élevé": "#E74C3C"}
+    fig = go.Figure()
+    for level in ["Faible", "Modéré", "Élevé"]:
+        sub = grouped[grouped["risk_level"] == level]
+        fig.add_trace(go.Bar(
+            x=sub["week_predicted"], y=sub["count"],
+            name=f"Risque {level}",
+            marker_color=RISK_COLORS_LOCAL.get(level, ACCENT),
+        ))
+    fig.update_layout(barmode="stack", xaxis_title="Période", yaxis_title="Nb de districts")
+    return _base_layout(fig, "Répartition des niveaux de risque par période")
+
+
+# ── 14. Cumul national prédit (page accueil) ─────────────────────────────────
+def plot_cumulative_national(predictions: pd.DataFrame) -> go.Figure:
+    df = predictions.copy()
+    df["week_predicted"] = pd.to_datetime(df["week_predicted"])
+    trend = df.groupby("week_predicted")["cases_predicted"].mean().reset_index()
+    trend = trend.sort_values("week_predicted")
+    trend["cumul"] = trend["cases_predicted"].cumsum()
+    fig = go.Figure(go.Scatter(
+        x=trend["week_predicted"], y=trend["cumul"],
+        mode="lines", fill="tozeroy",
+        line=dict(color=ACCENT, width=2),
+        fillcolor=f"rgba(52,152,219,0.15)",
+        name="Cumul incidence nationale",
+    ))
+    fig.update_layout(
+        xaxis_title="Période", yaxis_title="Cumul taux d'incidence (/1 000 hab.)",
+    )
+    return _base_layout(fig, "Charge épidémique cumulée prédite")

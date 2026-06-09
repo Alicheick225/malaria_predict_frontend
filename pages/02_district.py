@@ -81,36 +81,43 @@ with k4:
 st.divider()
 
 # ── 1. Série temporelle observé vs prédit ──────────────────────────────────────
-st.subheader("Comment l'incidence a-t-elle évolué et où va-t-elle ?")
+st.subheader("L'incidence est-elle en hausse, en baisse, ou au pic dans ce district ?")
 st.caption(
     "Trait plein = taux d'incidence observé (pour 1 000 hab.) — "
-    "pointillé = prévision du modèle, avec une bande indicative (± 15 %, non calibrée statistiquement)."
+    "pointillé = prévision du modèle pour les prochains mois, bande grisée = intervalle indicatif (±15 %, non calibré statistiquement)."
 )
 st.plotly_chart(plot_timeseries(history), use_container_width=True)
+st.caption(
+    "À retenir : deux mois consécutifs de hausse avec un score > 0,66 déclenchent l'alerte rouge — "
+    "c'est le signal qui doit motiver une mobilisation préventive immédiate."
+)
 
 # ── 2. Précipitations vs cas ───────────────────────────────────────────────────
-st.subheader("Quel est le lien entre précipitations et incidence ?")
+st.subheader("Les précipitations actuelles annoncent-elles un pic d'incidence dans 4 à 6 semaines ?")
 st.caption(
-    "Met en évidence le décalage typique entre un pic de précipitations et la "
-    "remontée de l'incidence quelques semaines plus tard (cycle de reproduction du moustique Anopheles)."
+    "Barres bleues = précipitations mensuelles (axe droit) — courbe rouge = taux d'incidence observé. "
+    "Un pic de pluies précède généralement un pic d'incidence de 4 à 6 semaines (cycle larvaire d'Anopheles)."
 )
 if not feature_history.empty:
     st.plotly_chart(
         plot_rainfall_overlay(history, feature_history[["date", "tp_mm"]]),
         use_container_width=True,
     )
+    st.caption(
+        "À retenir : si les précipitations sont actuellement en hausse dans ce district, "
+        "le modèle intègre ce signal comme facteur d'amplification de risque pour les prochains mois."
+    )
 else:
     st.info("Historique climatique indisponible pour ce district.")
 
 # ── 3. Heatmap saisonnière ─────────────────────────────────────────────────────
-st.subheader("Évolution de l'incidence du paludisme par mois et par année (cas pour 1 000 habitants)")
+st.subheader("L'incidence de ce district suit-elle un cycle saisonnier reproductible d'une année à l'autre ?")
 st.markdown(
     '<div class="section-intro">'
-    "Comment lire cette carte de chaleur : chaque cellule représente le taux d'incidence moyen "
-    "pour un mois donné (axe Y) et une année donnée (axe X). "
-    "Plus la couleur tire vers le rouge, plus l'incidence est élevée — "
-    "le vert indique une faible transmission. "
-    "Les pics saisonniers (avril-juillet, septembre-novembre) correspondent aux saisons des pluies en Côte d'Ivoire."
+    "Chaque cellule = taux d'incidence moyen pour un mois (axe Y) et une année (axe X). "
+    "Rouge = incidence élevée, vert = faible. "
+    "Si le schéma de couleurs se répète verticalement, le cycle saisonnier est stable et prévisible — "
+    "c'est ce que le modèle exploite pour anticiper les pics à venir."
     "</div>",
     unsafe_allow_html=True,
 )
@@ -118,18 +125,23 @@ if not hist_obs.empty:
     st.plotly_chart(
         plot_risk_heatmap(
             history,
-            title="Incidence mensuelle — 24 derniers mois (taux pour 1 000 hab.)",
+            title="Profil saisonnier mensuel — 24 derniers mois (taux /1 000 hab.)",
         ),
         use_container_width=True,
+    )
+    st.caption(
+        "À retenir : les mois d'avril–juillet et septembre–novembre concentrent systématiquement les pics. "
+        "Un mois inhabituellement rouge par rapport aux années précédentes signale une anomalie épidémique à surveiller."
     )
 else:
     st.info("Historique insuffisant pour générer la carte de chaleur.")
 
 # ── 4. Radar comparatif ────────────────────────────────────────────────────────
-st.subheader("Profil du district comparé à la moyenne nationale")
+st.subheader("Ce district cumule-t-il davantage de facteurs de risque que la moyenne nationale ?")
 st.caption(
-    "Comparaison normalisée sur 6 dimensions clés : précipitations, NDVI, NDWI, "
-    "température, population et couverture en moustiquaires (usage ITN)."
+    "Comparaison normalisée sur 6 dimensions : précipitations, végétation (NDVI), eau de surface (NDWI), "
+    "température, population et couverture en moustiquaires (ITN). "
+    "Une surface bleue plus grande que la grise indique un risque environnemental supérieur à la moyenne."
 )
 d_means       = detail.get("feature_means", {})
 n_means       = detail.get("national_feature_means", {})
@@ -141,14 +153,20 @@ if d_means and n_means:
         plot_radar(d_sub, n_sub, detail["district_name"]),
         use_container_width=True,
     )
+    st.caption(
+        "À retenir : un district peut avoir un score de risque élevé même avec peu de pluie "
+        "si sa couverture ITN est faible ou sa densité de population forte — "
+        "le radar permet d'identifier le levier d'action prioritaire."
+    )
 else:
     st.info("Profil comparatif indisponible pour ce district.")
 
 # ── 5. SHAP — facteurs explicatifs ─────────────────────────────────────────────
-st.subheader("Quels facteurs expliquent le plus la prédiction ?")
+st.subheader("Quels facteurs ont le plus influencé la prédiction pour ce district ce mois-ci ?")
 st.plotly_chart(plot_shap_bars(detail.get("top_features", [])), use_container_width=True)
 st.caption(
-    "Les contributions sont calculées par attribution différentiable "
-    "(Gradient × Input, approximation de SHAP adaptée aux réseaux récurrents) : "
-    "elles indiquent quelles variables d'entrée pèsent le plus dans la prédiction du mois suivant."
+    "Contributions calculées par Gradient × Input (approximation de SHAP pour réseaux récurrents). "
+    "À retenir : si les précipitations ou le NDWI dominent, l'exposition environnementale est le moteur principal du risque — "
+    "si l'ITN domine, c'est la faible protection des populations qui l'amplifie. "
+    "Ces attributions sont spécifiques à ce district et à cette prédiction, pas des importances globales."
 )

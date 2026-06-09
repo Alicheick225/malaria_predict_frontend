@@ -1,4 +1,4 @@
-"""Tendances nationales — comparaison multi-districts, heatmap, saisonnalité, top districts."""
+"""Tendances nationales — évolution prédite, comparaison multi-districts, heatmap, saisonnalité."""
 from __future__ import annotations
 
 import pandas as pd
@@ -11,17 +11,26 @@ from components.charts import (
     PANEL_BG,
     RISK_COLORS,
     TEXT_COLOR,
+    plot_cumulative_national,
+    plot_national_trend,
+    plot_risk_distribution_over_time,
     plot_seasonal_boxplot,
     plot_top_districts,
 )
 from components.styles import ALERT_HIGH, PRIMARY, inject_css
-from utils.api_client import cached_district_history, cached_districts_geojson, cached_districts_table
+from utils.api_client import (
+    cached_district_history,
+    cached_districts_geojson,
+    cached_districts_table,
+    cached_latest_predictions,
+)
 
 st.set_page_config(layout="wide", page_title="Tendances — MalariaWatch CI", page_icon="🦟")
 inject_css()
 
-horizon = st.session_state.get("horizon", 6)
-table   = cached_districts_table(horizon)
+horizon     = st.session_state.get("horizon", 6)
+table       = cached_districts_table(horizon)
+predictions = cached_latest_predictions(horizon)
 
 st.title("Tendances nationales")
 st.caption(
@@ -37,6 +46,54 @@ PALETTE = [
     "#9B59B6", "#1ABC9C", "#E67E22", "#D35400",
     "#2980B9", "#27AE60",
 ]
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 0. Évolution nationale prédite
+# ══════════════════════════════════════════════════════════════════════════════
+st.subheader("Comment l'épidémie va-t-elle évoluer au niveau national dans les prochains mois ?")
+st.caption(
+    "Prévisions agrégées sur les 33 districts — indicateurs synthétiques pour évaluer "
+    "la trajectoire nationale avant d'explorer les disparités par district ci-dessous."
+)
+
+tab_trend, tab_distrib, tab_cumul = st.tabs([
+    "Évolution de l'incidence",
+    "Répartition par niveau de risque",
+    "Cumul prédit",
+])
+with tab_trend:
+    st.plotly_chart(
+        plot_national_trend(predictions),
+        use_container_width=True,
+        config={"displayModeBar": False},
+    )
+    st.caption(
+        "Taux d'incidence moyen national agrégé sur les 33 districts. "
+        "À retenir : un pic national annonce une pression simultanée sur plusieurs districts — "
+        "c'est le signal qui doit déclencher une mobilisation à l'échelle nationale."
+    )
+with tab_distrib:
+    st.plotly_chart(
+        plot_risk_distribution_over_time(predictions),
+        use_container_width=True,
+        config={"displayModeBar": False},
+    )
+    st.caption(
+        "Nombre de districts par niveau de risque prédit, mois par mois. "
+        "Une barre rouge croissante signale une dégradation nationale de la situation épidémique."
+    )
+with tab_cumul:
+    st.plotly_chart(
+        plot_cumulative_national(predictions),
+        use_container_width=True,
+        config={"displayModeBar": False},
+    )
+    st.caption(
+        "Cumul du taux d'incidence national sur la période de prévision — "
+        "indicateur de la charge épidémique totale attendue."
+    )
+
+st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. Comparaison multi-districts (historique + prédictions)
@@ -125,16 +182,20 @@ if selection:
                 legendgroup=name,
             ))
 
-    # Ligne verticale : début des prédictions
-    fig.add_vline(
-        x=today_ts,
-        line_dash="dash",
-        line_color="#A0A8C0",
-        line_width=1.5,
-        annotation_text="Début des prédictions",
-        annotation_position="top right",
-        annotation_font_color="#A0A8C0",
-        annotation_font_size=11,
+    # Ligne verticale : début des prédictions (annotation séparée pour éviter bug Plotly + string dates)
+    x_str = today_ts.strftime("%Y-%m-%d")
+    fig.add_shape(
+        type="line",
+        x0=x_str, x1=x_str, y0=0, y1=1,
+        xref="x", yref="paper",
+        line=dict(dash="dash", color="#A0A8C0", width=1.5),
+    )
+    fig.add_annotation(
+        x=x_str, y=1, xref="x", yref="paper",
+        text="Début des prédictions",
+        showarrow=False,
+        font=dict(color="#A0A8C0", size=11),
+        xanchor="left", yanchor="top",
     )
 
     fig.update_layout(
@@ -160,19 +221,16 @@ st.divider()
 # ══════════════════════════════════════════════════════════════════════════════
 # 2. Heatmap nationale — tous districts × 12 derniers mois
 # ══════════════════════════════════════════════════════════════════════════════
-st.subheader(
-    "Évolution de l'incidence du paludisme par district et par période "
-    "(cas pour 1 000 habitants)"
-)
+st.subheader("Quels districts ont l'incidence la plus forte, et à quelle saison les pics surviennent-ils ?")
 st.markdown(
     '<div class="section-intro">'
-    "Chaque ligne représente un district sanitaire, chaque colonne un mois. "
-    "La couleur indique le taux d'incidence observé : "
-    "<span style='color:#2ECC71'>vert = faible</span>, "
+    "Chaque ligne = un district, chaque colonne = un mois. "
+    "Couleur : <span style='color:#2ECC71'>vert = faible</span>, "
     "<span style='color:#F39C12'>orange = modéré</span>, "
     "<span style='color:#E74C3C'>rouge = élevé</span>. "
-    "Les districts sont triés de haut en bas par incidence moyenne décroissante. "
-    "Cette vue met en évidence la saisonnalité et les disparités géographiques persistantes."
+    "Districts triés par incidence moyenne décroissante. "
+    "Contrairement au graphique de comparaison ci-dessus (trajectoires individuelles), "
+    "cette vue révèle en un coup d'œil les disparités géographiques persistantes sur toute la période."
     "</div>",
     unsafe_allow_html=True,
 )
@@ -222,9 +280,10 @@ if not heat_df.empty:
     )
     st.plotly_chart(fig_heat, use_container_width=True, config={"displayModeBar": False})
     st.caption(
-        "Retenir : les districts du Centre-Ouest et de l'Ouest forestier affichent "
-        "systématiquement les incidences les plus élevées, avec des pics marqués en "
-        "mai-juin et octobre-novembre (saisons des pluies)."
+        "À retenir : les districts du Centre-Ouest et de l'Ouest forestier affichent "
+        "systématiquement les incidences les plus élevées. "
+        "Les pics sont concentrés en mai-juin et octobre-novembre (saisons des pluies). "
+        "Un district rouge isolé hors pic saisonnier signale une anomalie épidémique à investiguer."
     )
 else:
     st.info("Pas assez de données pour générer la carte de chaleur nationale.")
