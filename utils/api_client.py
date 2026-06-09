@@ -11,19 +11,18 @@ import streamlit as st
 
 def _resolve_backend_url() -> str:
     """
-    Résout l'URL du backend : Streamlit Cloud expose les secrets via `st.secrets`
-    (et non `os.environ`), tandis que Docker Compose / l'exécution locale passent
-    par une variable d'environnement classique. On essaie les deux, dans cet ordre,
-    avec un repli sur le backend local pour le développement.
+    Résout l'URL du backend à chaque appel (ne pas mettre en cache module-level).
+    Streamlit Cloud expose les secrets via `st.secrets` ; Docker/local via os.environ.
     """
     try:
-        return st.secrets["BACKEND_URL"]
+        url = st.secrets["BACKEND_URL"]
+        if url:
+            return url.rstrip("/")
     except Exception:
-        return os.environ.get("BACKEND_URL", "http://localhost:8000")
+        pass
+    return os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 
-BACKEND_URL = _resolve_backend_url()
-API = f"{BACKEND_URL}/api/v1"
 TIMEOUT = 30  # le backend Render (tier gratuit) peut connaître un "cold start" de plusieurs dizaines de secondes
 
 DISTRICT_NAMES = [
@@ -40,13 +39,15 @@ FEATURES = ["t2m_c", "rh_pct", "tp_mm", "ndvi", "ndwi", "pfpr", "itn_use", "itn_
 class APIClient:
     """Encapsule les appels au backend ; bascule silencieusement sur des données simulées si indisponible."""
 
-    def __init__(self, base_url: str = BACKEND_URL):
-        self.base_url = base_url
+    def __init__(self, base_url: str | None = None):
+        # Résoudre dynamiquement à chaque instanciation pour lire st.secrets frais
+        self.base_url = (base_url or _resolve_backend_url()).rstrip("/")
+        self._api = f"{self.base_url}/api/v1"
 
     # ── Bas niveau ─────────────────────────────────────────────────────────────
     def _get(self, path: str, params: dict | None = None):
         try:
-            r = requests.get(f"{API}{path}", params=params, timeout=TIMEOUT)
+            r = requests.get(f"{self._api}{path}", params=params, timeout=TIMEOUT)
             r.raise_for_status()
             return r.json(), None
         except Exception as e:
@@ -106,7 +107,7 @@ class APIClient:
 
     def run_pipeline(self, horizon: int = 8) -> dict:
         try:
-            r = requests.post(f"{API}/predictions/run", params={"horizon": horizon}, timeout=120)
+            r = requests.post(f"{self._api}/predictions/run", params={"horizon": horizon}, timeout=120)
             r.raise_for_status()
             return r.json()
         except Exception as e:

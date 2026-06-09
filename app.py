@@ -11,6 +11,7 @@ from components.map_component import build_choropleth_map
 from components.styles import ACCENT, ALERT_HIGH, ALERT_LOW, ALERT_MED, inject_css
 from utils.api_client import (
     APIClient,
+    _resolve_backend_url,
     cached_districts_geojson,
     cached_districts_table,
     cached_latest_predictions,
@@ -32,7 +33,14 @@ with st.sidebar:
     st.markdown("## MalariaWatch CI")
     st.caption("Prévision spatio-temporelle du paludisme — Côte d'Ivoire")
 
-    backend_up = client.is_backend_up()
+    # Cache la vérification dans session_state (5 min) pour éviter un appel à chaque rerun
+    if "backend_up" not in st.session_state or (
+        st.session_state.get("backend_check_ts", 0) + 300 < __import__("time").time()
+    ):
+        st.session_state["backend_up"] = client.is_backend_up()
+        st.session_state["backend_check_ts"] = __import__("time").time()
+    backend_up = st.session_state["backend_up"]
+
     dot_color  = ALERT_LOW if backend_up else ALERT_HIGH
     dot_label  = "API connectée" if backend_up else "API indisponible — mode simulé"
     st.markdown(
@@ -40,9 +48,12 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     if not backend_up:
-        st.info(
-            "Le backend FastAPI ne répond pas : l'interface affiche des données "
-            "simulées pour rester pleinement navigable."
+        backend_url_used = _resolve_backend_url()
+        st.warning(
+            f"Le backend FastAPI ne répond pas ({backend_url_used}) : "
+            "l'interface affiche des données simulées pour rester pleinement navigable. "
+            "Sur Streamlit Cloud, vérifiez que le secret `BACKEND_URL` est configuré dans "
+            "App settings → Secrets."
         )
 
     st.divider()
