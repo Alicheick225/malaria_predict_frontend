@@ -53,7 +53,6 @@ with st.sidebar:
 
     st.divider()
     st.page_link("app.py",               label="Accueil")
-    st.page_link("pages/01_carte.py",    label="Carte interactive")
     st.page_link("pages/02_district.py", label="Détail district")
     st.page_link("pages/03_tendances.py",label="Tendances nationales")
     st.page_link("pages/04_modele.py",   label="Performance du modèle")
@@ -171,5 +170,6 @@ st.dataframe(
 
 st.info(
     "Cliquez sur un district dans la carte ci-dessus, puis ouvrez la page **Détail district** "
-    "pour explorer son historique complet et les facteurs explicatifs de sa prédiction."
+    "pour explorer son historique complet et les facteurs explicatifs de sa prédiction. "
+    "Utilisez **Tendances nationales** pour comparer les trajectoires de plusieurs districts."
 )
