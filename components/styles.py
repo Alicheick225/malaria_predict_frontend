@@ -23,50 +23,32 @@ RISK_COLORS = {"Faible": ALERT_LOW, "Modéré": ALERT_MED, "Élevé": ALERT_HIGH
 
 _CSS = f"""
 <style>
-/* ── Fond général ── */
-.stApp {{
-    background-color: {APP_BG};
-    color: {TEXT_COLOR};
-}}
-section[data-testid="stSidebar"] {{
-    background-color: {SIDEBAR_BG} !important;
-}}
 /* ── Réduction du padding haut ── */
 .block-container {{
     padding-top: 1.2rem !important;
     padding-bottom: 1.5rem !important;
     max-width: 1280px;
 }}
-/* ── Titres ── */
-h1, h2, h3, h4 {{
+/* ── Sidebar : conserve un fond foncé quelle que soit la thème ── */
+section[data-testid="stSidebar"] {{
+    background-color: {SIDEBAR_BG} !important;
+}}
+section[data-testid="stSidebar"] * {{
     color: {TEXT_COLOR} !important;
-    font-weight: 700;
 }}
 /* ── Onglets ── */
 .stTabs [data-baseweb="tab-list"] {{
-    background-color: {PANEL_BG};
     border-radius: 8px;
     gap: 2px;
 }}
-.stTabs [data-baseweb="tab"] {{
-    color: {TEXT_MUTED};
-    border-radius: 6px;
-    padding: 6px 16px;
-}}
 .stTabs [aria-selected="true"] {{
-    color: {TEXT_COLOR} !important;
-    background-color: {PRIMARY}44;
+    background-color: {PRIMARY}33;
     border-bottom: 2px solid {ACCENT};
 }}
 /* ── DataFrames ── */
 .stDataFrame thead tr th {{
     background-color: {PRIMARY} !important;
     color: {TEXT_COLOR} !important;
-}}
-/* ── Dividers ── */
-hr {{
-    border-color: {GRID_COLOR} !important;
-    margin: 0.8rem 0;
 }}
 /* ── Boutons primaires ── */
 .stButton > button[kind="primary"] {{
@@ -109,7 +91,7 @@ hr {{
     font-size: 0.88rem;
     display: inline-block;
 }}
-/* ── Classement rows ── */
+/* ── Classement rows : hérite de la couleur de texte du thème ── */
 .mw-rank-row {{
     display: flex;
     align-items: center;
@@ -117,16 +99,15 @@ hr {{
     padding: 6px 4px;
     border-bottom: 1px solid {GRID_COLOR};
     font-size: 0.92rem;
-    color: {TEXT_COLOR};
 }}
 .mw-rank-num {{
     font-weight: 700;
     min-width: 52px;
     text-align: right;
-    color: {TEXT_COLOR};
     font-variant-numeric: tabular-nums;
+    color: {ACCENT};
 }}
-/* ── Header banner ── */
+/* ── Header banner : fond sombre propre, toujours blanc ── */
 .mw-header {{
     background: linear-gradient(90deg, {PRIMARY} 0%, #163a5c 100%);
     border-radius: 10px;
@@ -138,12 +119,12 @@ hr {{
     border-left: 4px solid {ACCENT};
 }}
 .mw-header h1 {{
-    color: {TEXT_COLOR};
+    color: {TEXT_COLOR} !important;
     font-size: 1.45rem;
     margin: 0;
 }}
 .mw-header p {{
-    color: {TEXT_MUTED};
+    color: #c8d8e8;
     margin: 4px 0 0 0;
     font-size: 0.87rem;
 }}
@@ -156,24 +137,22 @@ hr {{
     margin-right: 6px;
     vertical-align: middle;
 }}
-/* ── Section intro text ── */
+/* ── Section intro text : hérite du thème, légèrement atténuée ── */
 .section-intro {{
-    color: {TEXT_MUTED};
     font-size: 0.9rem;
     line-height: 1.6;
     margin-bottom: 10px;
     border-left: 3px solid {ACCENT};
     padding-left: 10px;
+    opacity: 0.82;
 }}
 /* ── Alerte box ── */
 .alert-box {{
-    background: {PANEL_BG};
     border: 1px solid {GRID_COLOR};
     border-radius: 8px;
     padding: 12px 16px;
     margin: 8px 0;
     font-size: 0.9rem;
-    color: {TEXT_COLOR};
 }}
 </style>
 """
