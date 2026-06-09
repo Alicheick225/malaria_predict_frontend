@@ -1,4 +1,4 @@
-"""Tendances nationales — évolution prédite, comparaison multi-districts, heatmap, saisonnalité."""
+"""Tendances nationales — comparaison multi-districts, heatmap, saisonnalité."""
 from __future__ import annotations
 
 import pandas as pd
@@ -11,26 +11,20 @@ from components.charts import (
     PANEL_BG,
     RISK_COLORS,
     TEXT_COLOR,
-    plot_cumulative_national,
-    plot_national_trend,
-    plot_risk_distribution_over_time,
     plot_seasonal_boxplot,
-    plot_top_districts,
 )
 from components.styles import ALERT_HIGH, PRIMARY, inject_css
 from utils.api_client import (
     cached_district_history,
     cached_districts_geojson,
     cached_districts_table,
-    cached_latest_predictions,
 )
 
 st.set_page_config(layout="wide", page_title="Tendances — MalariaWatch CI", page_icon="🦟")
 inject_css()
 
-horizon     = st.session_state.get("horizon", 6)
-table       = cached_districts_table(horizon)
-predictions = cached_latest_predictions(horizon)
+horizon = st.session_state.get("horizon", 6)
+table   = cached_districts_table(horizon)
 
 st.title("Tendances nationales")
 st.caption(
@@ -40,60 +34,11 @@ st.caption(
 
 names = sorted(table["district_name"].unique().tolist())
 
-# ── Palette de couleurs pour les districts ─────────────────────────────────────
 PALETTE = [
     "#3498DB", "#2ECC71", "#E74C3C", "#F39C12",
     "#9B59B6", "#1ABC9C", "#E67E22", "#D35400",
     "#2980B9", "#27AE60",
 ]
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 0. Évolution nationale prédite
-# ══════════════════════════════════════════════════════════════════════════════
-st.subheader("Comment l'épidémie va-t-elle évoluer au niveau national dans les prochains mois ?")
-st.caption(
-    "Prévisions agrégées sur les 33 districts — indicateurs synthétiques pour évaluer "
-    "la trajectoire nationale avant d'explorer les disparités par district ci-dessous."
-)
-
-tab_trend, tab_distrib, tab_cumul = st.tabs([
-    "Évolution de l'incidence",
-    "Répartition par niveau de risque",
-    "Cumul prédit",
-])
-with tab_trend:
-    st.plotly_chart(
-        plot_national_trend(predictions),
-        use_container_width=True,
-        config={"displayModeBar": False},
-    )
-    st.caption(
-        "Taux d'incidence moyen national agrégé sur les 33 districts. "
-        "À retenir : un pic national annonce une pression simultanée sur plusieurs districts — "
-        "c'est le signal qui doit déclencher une mobilisation à l'échelle nationale."
-    )
-with tab_distrib:
-    st.plotly_chart(
-        plot_risk_distribution_over_time(predictions),
-        use_container_width=True,
-        config={"displayModeBar": False},
-    )
-    st.caption(
-        "Nombre de districts par niveau de risque prédit, mois par mois. "
-        "Une barre rouge croissante signale une dégradation nationale de la situation épidémique."
-    )
-with tab_cumul:
-    st.plotly_chart(
-        plot_cumulative_national(predictions),
-        use_container_width=True,
-        config={"displayModeBar": False},
-    )
-    st.caption(
-        "Cumul du taux d'incidence national sur la période de prévision — "
-        "indicateur de la charge épidémique totale attendue."
-    )
-
-st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. Comparaison multi-districts (historique + prédictions)
@@ -133,7 +78,6 @@ if selection:
         hist  = cached_district_history(did)
         hist["date"] = pd.to_datetime(hist["date"])
 
-        # Filtre sur la période choisie
         hist = hist[
             (hist["date"].dt.year >= year_range[0]) &
             (hist["date"].dt.year <= year_range[1])
@@ -143,7 +87,6 @@ if selection:
         obs   = hist.dropna(subset=["cases_observed"]).sort_values("date")
         pred  = hist.dropna(subset=["cases_predicted"]).sort_values("date")
 
-        # Données observées — trait plein
         if not obs.empty:
             fig.add_trace(go.Scatter(
                 x=obs["date"], y=obs["cases_observed"],
@@ -153,11 +96,9 @@ if selection:
                 legendgroup=name,
             ))
 
-        # Prévisions — trait pointillé + bande de confiance
         if not pred.empty:
             upper = pred["cases_predicted"] * 1.15
             lower = pred["cases_predicted"] * 0.85
-            # Bande de confiance (remplie, semi-transparente)
             r_int = int(color[1:3], 16)
             g_int = int(color[3:5], 16)
             b_int = int(color[5:7], 16)
@@ -172,7 +113,6 @@ if selection:
                 showlegend=False,
                 hoverinfo="skip",
             ))
-            # Ligne pointillée des prédictions
             fig.add_trace(go.Scatter(
                 x=pred["date"], y=pred["cases_predicted"],
                 name=f"{name} (prédit)",
@@ -182,7 +122,6 @@ if selection:
                 legendgroup=name,
             ))
 
-    # Ligne verticale : début des prédictions (annotation séparée pour éviter bug Plotly + string dates)
     x_str = today_ts.strftime("%Y-%m-%d")
     fig.add_shape(
         type="line",
@@ -326,22 +265,3 @@ if not preds_full.empty:
     )
 else:
     st.info("Données de prévision insuffisantes pour le graphique de saisonnalité.")
-
-st.divider()
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 4. Top 10 districts à risque (cette période)
-# ══════════════════════════════════════════════════════════════════════════════
-st.subheader("Quels sont les 10 districts les plus à risque cette période ?")
-if not gdf.empty and "risk_score" in gdf.columns:
-    st.plotly_chart(
-        plot_top_districts(gdf.dropna(subset=["risk_score"]), n=10),
-        use_container_width=True,
-        config={"displayModeBar": False},
-    )
-    st.caption(
-        "Score de risque normalisé de 0 à 1. Un score > 0.66 déclenche une alerte "
-        "rouge ; entre 0.33 et 0.66, une alerte orange (modérée)."
-    )
-else:
-    st.info("Scores de risque indisponibles.")

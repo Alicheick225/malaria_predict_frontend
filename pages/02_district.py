@@ -1,4 +1,4 @@
-"""Détail d'un district — KPIs, historique observé/prédit, corrélation pluie/cas, radar, SHAP."""
+"""Détail d'un district — série temporelle, comparaison radar, attributions SHAP."""
 from __future__ import annotations
 
 import pandas as pd
@@ -6,8 +6,6 @@ import streamlit as st
 
 from components.charts import (
     plot_radar,
-    plot_rainfall_overlay,
-    plot_risk_heatmap,
     plot_shap_bars,
     plot_timeseries,
 )
@@ -31,12 +29,11 @@ default_idx = names.index(pre_selected) if pre_selected in names else 0
 
 selected_name = st.selectbox("Sélectionner un district", names, index=default_idx)
 
-row        = table[table["district_name"] == selected_name]
+row         = table[table["district_name"] == selected_name]
 district_id = row["district_id"].iloc[0] if not row.empty else f"MOCK.{names.index(selected_name)+1}"
 
-detail         = cached_district_detail(district_id)
-history        = pd.DataFrame(detail.get("history", []))
-feature_history = pd.DataFrame(detail.get("feature_history", []))
+detail          = cached_district_detail(district_id)
+history         = pd.DataFrame(detail.get("history", []))
 
 # ── En-tête ────────────────────────────────────────────────────────────────────
 c1, c2 = st.columns([3, 1])
@@ -44,7 +41,7 @@ with c1:
     st.subheader(detail["district_name"])
     st.caption(
         f"Région : {detail.get('region', 'N/A')}  "
-        f"·  Population estimée : {detail.get('population', 0):,.0f} habitants".replace(",", " ")
+        f"·  Population estimée : {detail.get('population', 0):,.0f} habitants".replace(",", " ")
     )
 with c2:
     if detail.get("risk_level"):
@@ -97,59 +94,17 @@ st.caption(
     "c'est le signal qui doit motiver une mobilisation préventive immédiate."
 )
 
-# ── 2. Précipitations vs cas ───────────────────────────────────────────────────
-st.subheader("Les précipitations actuelles annoncent-elles un pic d'incidence dans 4 à 6 semaines ?")
-st.caption(
-    "Barres bleues = précipitations mensuelles (axe droit) — courbe rouge = taux d'incidence observé. "
-    "Un pic de pluies précède généralement un pic d'incidence de 4 à 6 semaines (cycle larvaire d'Anopheles)."
-)
-if not feature_history.empty:
-    st.plotly_chart(
-        plot_rainfall_overlay(history, feature_history[["date", "tp_mm"]]),
-        use_container_width=True,
-    )
-    st.caption(
-        "À retenir : si les précipitations sont actuellement en hausse dans ce district, "
-        "le modèle intègre ce signal comme facteur d'amplification de risque pour les prochains mois."
-    )
-else:
-    st.info("Historique climatique indisponible pour ce district.")
+st.divider()
 
-# ── 3. Heatmap saisonnière ─────────────────────────────────────────────────────
-st.subheader("L'incidence de ce district suit-elle un cycle saisonnier reproductible d'une année à l'autre ?")
-st.markdown(
-    '<div class="section-intro">'
-    "Chaque cellule = taux d'incidence moyen pour un mois (axe Y) et une année (axe X). "
-    "Rouge = incidence élevée, vert = faible. "
-    "Si le schéma de couleurs se répète verticalement, le cycle saisonnier est stable et prévisible — "
-    "c'est ce que le modèle exploite pour anticiper les pics à venir."
-    "</div>",
-    unsafe_allow_html=True,
-)
-if not hist_obs.empty:
-    st.plotly_chart(
-        plot_risk_heatmap(
-            history,
-            title="Profil saisonnier mensuel — 24 derniers mois (taux /1 000 hab.)",
-        ),
-        use_container_width=True,
-    )
-    st.caption(
-        "À retenir : les mois d'avril–juillet et septembre–novembre concentrent systématiquement les pics. "
-        "Un mois inhabituellement rouge par rapport aux années précédentes signale une anomalie épidémique à surveiller."
-    )
-else:
-    st.info("Historique insuffisant pour générer la carte de chaleur.")
-
-# ── 4. Radar comparatif ────────────────────────────────────────────────────────
+# ── 2. Radar comparatif ────────────────────────────────────────────────────────
 st.subheader("Ce district cumule-t-il davantage de facteurs de risque que la moyenne nationale ?")
 st.caption(
     "Comparaison normalisée sur 6 dimensions : précipitations, végétation (NDVI), eau de surface (NDWI), "
     "température, population et couverture en moustiquaires (ITN). "
     "Une surface bleue plus grande que la grise indique un risque environnemental supérieur à la moyenne."
 )
-d_means       = detail.get("feature_means", {})
-n_means       = detail.get("national_feature_means", {})
+d_means        = detail.get("feature_means", {})
+n_means        = detail.get("national_feature_means", {})
 radar_features = ["tp_mm", "ndvi", "ndwi", "t2m_c", "population", "itn_use"]
 if d_means and n_means:
     d_sub = {f: d_means.get(f, 0) for f in radar_features}
@@ -166,7 +121,9 @@ if d_means and n_means:
 else:
     st.info("Profil comparatif indisponible pour ce district.")
 
-# ── 5. SHAP — facteurs explicatifs ─────────────────────────────────────────────
+st.divider()
+
+# ── 3. SHAP — facteurs explicatifs ─────────────────────────────────────────────
 st.subheader("Quels facteurs ont le plus influencé la prédiction pour ce district ce mois-ci ?")
 st.plotly_chart(plot_shap_bars(detail.get("top_features", [])), use_container_width=True)
 st.caption(
