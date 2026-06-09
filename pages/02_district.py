@@ -23,8 +23,13 @@ table   = cached_districts_table(horizon)
 
 st.title("Détail par district sanitaire")
 
-names         = sorted(table["district_name"].unique().tolist()) if not table.empty else DISTRICT_NAMES
-selected_name = st.selectbox("Sélectionner un district", names, index=0)
+names = sorted(table["district_name"].unique().tolist()) if not table.empty else DISTRICT_NAMES
+
+# Pré-sélectionner le district cliqué sur la carte d'accueil (si disponible)
+pre_selected = st.session_state.get("selected_district")
+default_idx = names.index(pre_selected) if pre_selected in names else 0
+
+selected_name = st.selectbox("Sélectionner un district", names, index=default_idx)
 
 row        = table[table["district_name"] == selected_name]
 district_id = row["district_id"].iloc[0] if not row.empty else f"MOCK.{names.index(selected_name)+1}"

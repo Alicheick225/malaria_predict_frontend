@@ -3,6 +3,8 @@ MalariaWatch CI — tableau de bord principal de surveillance épidémique.
 """
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 from streamlit_folium import st_folium
 
@@ -35,10 +37,10 @@ with st.sidebar:
 
     # Cache la vérification dans session_state (5 min) pour éviter un appel à chaque rerun
     if "backend_up" not in st.session_state or (
-        st.session_state.get("backend_check_ts", 0) + 300 < __import__("time").time()
+        st.session_state.get("backend_check_ts", 0) + 300 < time.time()
     ):
         st.session_state["backend_up"] = client.is_backend_up()
-        st.session_state["backend_check_ts"] = __import__("time").time()
+        st.session_state["backend_check_ts"] = time.time()
     backend_up = st.session_state["backend_up"]
 
     dot_color  = ALERT_LOW if backend_up else ALERT_HIGH
@@ -69,6 +71,14 @@ with st.sidebar:
     st.page_link("pages/04_modele.py",   label="Performance du modèle")
 
     st.divider()
+    if st.button("Vider le cache", use_container_width=True,
+                 help="Force le rechargement des données depuis le backend (utile si les données semblent incorrectes)"):
+        st.cache_data.clear()
+        for k in ["backend_up", "backend_check_ts"]:
+            st.session_state.pop(k, None)
+        st.success("Cache vidé — les données seront rechargées.")
+        st.rerun()
+
     st.markdown("##### Pipeline de prédiction")
     if st.button("Rafraîchir les prédictions", type="primary", use_container_width=True):
         with st.spinner("Exécution du pipeline d'inférence — cela peut prendre une minute..."):
@@ -143,13 +153,20 @@ st.caption(
 )
 
 fmap = build_choropleth_map(geojson, horizon)
-st_folium(
+map_data = st_folium(
     fmap,
     use_container_width=True,
     height=560,
     key="home_map",
-    returned_objects=["last_object_clicked_tooltip"],
+    returned_objects=["last_object_clicked"],
 )
+
+# Mémoriser le district cliqué pour pré-sélectionner la page Détail
+clicked = (map_data or {}).get("last_object_clicked") or {}
+clicked_name = clicked.get("district_name") if isinstance(clicked, dict) else None
+if clicked_name:
+    st.session_state["selected_district"] = clicked_name
+    st.caption(f"District sélectionné : **{clicked_name}** — ouvrez la page **Détail district** pour l'explorer.")
 
 st.divider()
 
